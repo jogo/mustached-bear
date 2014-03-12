@@ -13,8 +13,7 @@ Pulls the following orgs: openstack openstack-dev and openstack-infra
 
 #TODO(jogo): convert to python3
 #TODO(jogo): add safety check for input from yaml
-#TODO(jogo): convert into a repo
-#TODO(jogo): rewrite in go as an exercise
+#TODO(jogo): list local repos that aren't upstream (due to renames etc...)
 #TODO(jogo): make organizations to track configurable
 
 
