@@ -11,6 +11,10 @@ Clone/Fetch all openstack repos
 Usage
 -----
 
-Just run in the directory where you wish to keep your repos
+Install requirements:
+
+  $ pip -r requirements.txt
+
+Just run in the directory where you wish to keep your repos:
 
   $ ./update
