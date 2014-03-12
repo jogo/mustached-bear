@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+
+import os
+import subprocess
+import urllib2
+import yaml
+
+"""
+Clone/Fetch all openstack repos from git.o.o.
+
+Pulls the following orgs: openstack openstack-dev and openstack-infra
+"""
+
+#TODO(jogo): convert to python3
+#TODO(jogo): add safety check for input from yaml
+#TODO(jogo): convert into a repo
+#TODO(jogo): rewrite in go as an exercise
+#TODO(jogo): make organizations to track configurable
+
+
+def _get_git_uri(name, org):
+    # Convert to git://git.openstack.org/openstack/tempest
+    return "git://git.openstack.org/%s/%s" % (org, name)
+
+
+def _ignore_org(org):
+    return 'stackforge' == org
+
+
+def _dir(name, org):
+    return "%s/%s" % (org, name)
+
+
+def main():
+    # List of all openstack repos
+    URL = "https://git.openstack.org/cgit/openstack-infra/config/plain/modules/openstack_project/files/jenkins_job_builder/config/projects.yaml"
+    projects = yaml.safe_load(urllib2.urlopen(URL).read())
+    for project in projects:
+        if 'github-org' not in project['project']:
+            continue
+        org = project['project']['github-org']
+        name = project['project']['name']
+        if _ignore_org(org):
+            continue
+        uri = _get_git_uri(name, org)
+        print uri
+        git_dir = _dir(name, org)
+        if os.path.exists(git_dir):
+            # If git_dir exists just run git fetch
+            original = os.getcwd()
+            os.chdir(git_dir)
+            command = "git fetch origin"
+            subprocess.call(command.split(' '))
+            os.chdir(original)
+        else:
+            command = "git clone %s %s" % (uri, git_dir)
+            subprocess.call(command.split(' '))
+
+
+if __name__ == "__main__":
+    main()
