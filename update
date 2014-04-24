@@ -39,12 +39,10 @@ def main():
             continue
         org = project['project']['github-org']
         name = project['project']['name']
-        if _ignore_org(org):
-            continue
         uri = _get_git_uri(name, org)
-        print uri
         git_dir = _dir(name, org)
         if os.path.exists(git_dir):
+            print uri
             # If git_dir exists just run git fetch
             original = os.getcwd()
             os.chdir(git_dir)
@@ -57,7 +55,8 @@ def main():
                 subprocess.call("git fetch origin".split(' '))
 
             os.chdir(original)
-        else:
+        elif not _ignore_org(org):
+            print uri
             command = "git clone %s %s" % (uri, git_dir)
             subprocess.call(command.split(' '))
 
