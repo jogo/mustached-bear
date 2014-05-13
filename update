@@ -52,7 +52,11 @@ def main():
             command = "git rev-parse --abbrev-ref HEAD"
             out = subprocess.check_output(command.split(' '))
             if "master\n" == out:
-                subprocess.call("git pull".split(' '))
+                if subprocess.call("git diff --exit-code".split(' ')) is 0:
+                    # Don't do a git pull if local changes
+                    subprocess.call("git pull".split(' '))
+            else:
+                print("Branch: '%s'" % out.strip())
 
             os.chdir(original)
         elif not _ignore_org(org):
