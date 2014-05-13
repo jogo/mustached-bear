@@ -52,7 +52,7 @@ def main():
             command = "git rev-parse --abbrev-ref HEAD"
             out = subprocess.check_output(command.split(' '))
             if "master\n" == out:
-                subprocess.call("git fetch origin".split(' '))
+                subprocess.call("git pull".split(' '))
 
             os.chdir(original)
         elif not _ignore_org(org):
