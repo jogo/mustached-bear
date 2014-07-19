@@ -48,6 +48,9 @@ def main():
             os.chdir(git_dir)
             command = "git fetch origin"
             subprocess.call(command.split(' '))
+            # get notes
+            command = "git fetch origin refs/notes/review:refs/notes/review"
+            subprocess.call(command.split(' '))
             # If current branch is master, do git pull
             command = "git rev-parse --abbrev-ref HEAD"
             out = subprocess.check_output(command.split(' '))
