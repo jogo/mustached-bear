@@ -2,8 +2,9 @@
 
 import os
 import subprocess
-import urllib2
-import yaml
+
+import json
+import requests
 
 """
 Clone/Fetch all openstack repos from git.o.o.
@@ -12,7 +13,6 @@ Pulls the following orgs: openstack openstack-dev and openstack-infra
 """
 
 #TODO(jogo): convert to python3
-#TODO(jogo): add safety check for input from yaml
 #TODO(jogo): list local repos that aren't upstream (due to renames etc...)
 #TODO(jogo): make organizations to track configurable
 
@@ -23,7 +23,7 @@ def _get_git_uri(name, org):
 
 
 def _ignore_org(org):
-    return 'stackforge' == org
+    return org in ['stackforge', 'openstack-attic']
 
 
 def _dir(name, org):
@@ -32,13 +32,14 @@ def _dir(name, org):
 
 def main():
     # List of all openstack repos
-    URL = "https://git.openstack.org/cgit/openstack-infra/config/plain/modules/openstack_project/files/jenkins_job_builder/config/projects.yaml"
-    projects = yaml.safe_load(urllib2.urlopen(URL).read())
+    r = requests.get("https://review.openstack.org:443/projects/")
+    # strip off first few chars because 'the JSON response body starts with a
+    # magic prefix line that must be stripped before feeding the rest of the
+    # response body to a JSON parser'
+    # https://review.openstack.org/Documentation/rest-api.html
+    projects = json.loads(r.text[4:])
     for project in projects:
-        if 'github-org' not in project['project']:
-            continue
-        org = project['project']['github-org']
-        name = project['project']['name']
+        org, name = project.split('/')
         uri = _get_git_uri(name, org)
         git_dir = _dir(name, org)
         if os.path.exists(git_dir):
