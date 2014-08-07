@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
+import json
 import os
 import subprocess
 
-import json
 import requests
 
 """
@@ -12,9 +12,9 @@ Clone/Fetch all openstack repos from git.o.o.
 Pulls the following orgs: openstack openstack-dev and openstack-infra
 """
 
-#TODO(jogo): convert to python3
-#TODO(jogo): list local repos that aren't upstream (due to renames etc...)
-#TODO(jogo): make organizations to track configurable
+# TODO(jogo): convert to python3
+# TODO(jogo): list local repos that aren't upstream (due to renames etc...)
+# TODO(jogo): make organizations to track configurable
 
 
 def _get_git_uri(name, org):
