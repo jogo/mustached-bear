@@ -23,7 +23,7 @@ def _get_git_uri(name, org):
 
 
 def _ignore_org(org):
-    return org in ['stackforge', 'openstack-attic']
+    return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
 
 
 def _dir(name, org):
