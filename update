@@ -37,6 +37,7 @@ def main():
     # magic prefix line that must be stripped before feeding the rest of the
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
+    repos_not_on_master = []
     projects = json.loads(r.text[4:])
     for project in projects:
         org, name = project.split('/')
@@ -60,13 +61,18 @@ def main():
                     # Don't do a git pull if local changes
                     subprocess.call("git pull".split(' '))
             else:
-                print("Branch: '%s'" % out.strip())
+                branch = out.strip()
+                print("Branch: '%s'" % branch)
+                repos_not_on_master.append(git_dir)
 
             os.chdir(original)
         elif not _ignore_org(org):
             print uri
             command = "git clone %s %s" % (uri, git_dir)
             subprocess.call(command.split(' '))
+    print "Repositories not on master branch"
+    for repo in repos_not_on_master:
+        print repo
 
 
 if __name__ == "__main__":
