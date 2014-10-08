@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
+import argparse
 import json
 import os
 import subprocess
+import sys
 
 import requests
 
@@ -26,11 +28,7 @@ def _ignore_org(org):
     return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
 
 
-def _dir(name, org):
-    return "%s/%s" % (org, name)
-
-
-def main():
+def main(create_org_dir):
     # List of all openstack repos
     r = requests.get("https://review.openstack.org:443/projects/")
     # strip off first few chars because 'the JSON response body starts with a
@@ -42,9 +40,9 @@ def main():
     for project in projects:
         org, name = project.split('/')
         uri = _get_git_uri(name, org)
-        git_dir = _dir(name, org)
+        git_dir = os.path.join(org, name)
         if os.path.exists(git_dir):
-            print uri
+            print(uri)
             # If git_dir exists just run git fetch
             original = os.getcwd()
             os.chdir(git_dir)
@@ -67,13 +65,21 @@ def main():
 
             os.chdir(original)
         elif not _ignore_org(org):
-            print uri
+            print(uri)
+            dirname = os.path.dirname(git_dir)
+            if not os.path.exists(dirname) and not create_org_dir:
+                print("Directory %s does not exist, see help" % dirname)
+                sys.exit(1)
             command = "git clone %s %s" % (uri, git_dir)
             subprocess.call(command.split(' '))
-    print "Repositories not on master branch"
+    print("Repositories not on master branch")
     for repo in repos_not_on_master:
-        print repo
+        print(repo)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser("Clone OpenStack repos")
+    parser.add_argument('--force', '-f', action='store_true',
+                        help='create organization directories if not found')
+    args = parser.parse_args()
+    main(args.force)
