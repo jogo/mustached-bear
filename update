@@ -99,7 +99,7 @@ def main(create_org_dir):
                 print(uri)
                 dirname = os.path.dirname(git_dir)
                 if not os.path.exists(dirname) and not create_org_dir:
-                    print("Directory %s does not exist, see help" % dirname)
+                    print("Directory '%s' does not exist, see help" % dirname)
                     sys.exit(1)
                 command = "git clone %s %s" % (uri, git_dir)
                 subprocess.call(command.split(' '))
