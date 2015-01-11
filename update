@@ -36,6 +36,7 @@ def main(create_org_dir):
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
     repos_not_on_master = []
+    repo_errors = []
     projects = json.loads(r.text[4:])
     for project in projects:
         org, name = project.split('/')
@@ -55,9 +56,13 @@ def main(create_org_dir):
             command = "git rev-parse --abbrev-ref HEAD"
             out = subprocess.check_output(command.split(' '))
             if "master\n" == out:
+                # Don't do a git pull if local changes
                 if subprocess.call("git diff --exit-code".split(' ')) is 0:
-                    # Don't do a git pull if local changes
-                    subprocess.call("git pull".split(' '))
+                    # if needs a merge, fail
+                    if (subprocess.call("git pull --ff-only".split(' '))
+                       is not 0):
+                        # ff failed
+                        repo_errors.append(git_dir)
             else:
                 branch = out.strip()
                 print("Branch: '%s'" % branch)
@@ -72,8 +77,11 @@ def main(create_org_dir):
                 sys.exit(1)
             command = "git clone %s %s" % (uri, git_dir)
             subprocess.call(command.split(' '))
-    print("Repositories not on master branch")
+    print("Repositories not on master branch:")
     for repo in repos_not_on_master:
+        print(repo)
+    print("Errors pulling the following repositories:")
+    for repo in repo_errors:
         print(repo)
 
 
