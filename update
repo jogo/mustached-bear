@@ -24,7 +24,7 @@ import sys
 import requests
 
 """
-Clone/Fetch all openstack repos from git.o.o.
+Clone/Fetch all openstack repos from git.openstack.org.
 
 Pulls the following orgs: openstack openstack-dev and openstack-infra
 """
@@ -32,6 +32,10 @@ Pulls the following orgs: openstack openstack-dev and openstack-infra
 # TODO(jogo): convert to python3
 # TODO(jogo): list local repos that aren't upstream (due to renames etc...)
 # TODO(jogo): make organizations to track configurable
+
+
+repos_not_on_master = []
+repo_errors = []
 
 
 def _get_git_uri(org, name):
@@ -43,6 +47,36 @@ def _ignore_org(org):
     return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
 
 
+def _update(uri, git_dir):
+    print(uri)
+    original = os.getcwd()
+    os.chdir(git_dir)
+    command = "git fetch origin"
+    subprocess.call(command.split(' '))
+    # get notes, fail silently
+    command = ("git fetch origin "
+               "refs/notes/review:refs/notes/review")
+    subprocess.Popen(command.split(' '),
+                     stderr=subprocess.PIPE).communicate()
+    # If current branch is master, do git pull
+    command = "git rev-parse --abbrev-ref HEAD"
+    out = subprocess.check_output(command.split(' '))
+    if "master\n" == out:
+        # Don't do a git pull if local changes
+        if subprocess.call("git diff --exit-code".split(' ')) is 0:
+            # if needs a merge, fail
+            if (subprocess.call("git pull --ff-only".split(' '))
+               is not 0):
+                # ff failed
+                repo_errors.append(git_dir)
+    else:
+        # make a note of the current branch
+        branch = out.strip()
+        print("Branch: '%s'" % branch)
+        repos_not_on_master.append(git_dir)
+    os.chdir(original)
+
+
 def main(create_org_dir):
     # List of all openstack repos
     r = requests.get("https://review.openstack.org:443/projects/")
@@ -50,55 +84,40 @@ def main(create_org_dir):
     # magic prefix line that must be stripped before feeding the rest of the
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
-    repos_not_on_master = []
-    repo_errors = []
     projects = json.loads(r.text[4:])
-    for project in projects:
-        org, name = project.split('/')
-        uri = _get_git_uri(org, name)
-        git_dir = os.path.join(org, name)
-        if os.path.exists(git_dir):
-            print(uri)
-            # If git_dir exists just run git fetch
-            original = os.getcwd()
-            os.chdir(git_dir)
-            command = "git fetch origin"
-            subprocess.call(command.split(' '))
-            # get notes
-            command = "git fetch origin refs/notes/review:refs/notes/review"
-            subprocess.call(command.split(' '))
-            # If current branch is master, do git pull
-            command = "git rev-parse --abbrev-ref HEAD"
-            out = subprocess.check_output(command.split(' '))
-            if "master\n" == out:
-                # Don't do a git pull if local changes
-                if subprocess.call("git diff --exit-code".split(' ')) is 0:
-                    # if needs a merge, fail
-                    if (subprocess.call("git pull --ff-only".split(' '))
-                       is not 0):
-                        # ff failed
-                        repo_errors.append(git_dir)
-            else:
-                branch = out.strip()
-                print("Branch: '%s'" % branch)
-                repos_not_on_master.append(git_dir)
+    try:
+        for project in projects:
+            org, name = project.split('/')
+            uri = _get_git_uri(org, name)
+            git_dir = os.path.join(org, name)
 
-            os.chdir(original)
-        elif not _ignore_org(org):
-            print(uri)
-            dirname = os.path.dirname(git_dir)
-            if not os.path.exists(dirname) and not create_org_dir:
-                print("Directory %s does not exist, see help" % dirname)
-                sys.exit(1)
-            command = "git clone %s %s" % (uri, git_dir)
-            subprocess.call(command.split(' '))
-    print("Repositories not on master branch:")
+            if os.path.exists(git_dir):
+                # If git_dir exists just run git pull/fetch
+                _update(uri, git_dir)
+
+            elif not _ignore_org(org):
+                print(uri)
+                dirname = os.path.dirname(git_dir)
+                if not os.path.exists(dirname) and not create_org_dir:
+                    print("Directory %s does not exist, see help" % dirname)
+                    sys.exit(1)
+                command = "git clone %s %s" % (uri, git_dir)
+                subprocess.call(command.split(' '))
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    finally:
+        _print_issues()
+
+
+def _print_issues():
+    if len(repos_not_on_master) > 0:
+        print("Repositories not on master branch:")
     for repo in repos_not_on_master:
-        print(repo)
-    print("Errors pulling the following repositories:")
+        print("- %s" % repo)
+    if len(repo_errors) > 0:
+        print("Errors pulling the following repositories:")
     for repo in repo_errors:
-        print(repo)
-
+        print("- %s" % repo)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Clone OpenStack repos")
