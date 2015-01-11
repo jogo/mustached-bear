@@ -19,7 +19,7 @@ Pulls the following orgs: openstack openstack-dev and openstack-infra
 # TODO(jogo): make organizations to track configurable
 
 
-def _get_git_uri(name, org):
+def _get_git_uri(org, name):
     # Convert to git://git.openstack.org/openstack/tempest
     return "git://git.openstack.org/%s/%s" % (org, name)
 
@@ -39,7 +39,7 @@ def main(create_org_dir):
     projects = json.loads(r.text[4:])
     for project in projects:
         org, name = project.split('/')
-        uri = _get_git_uri(name, org)
+        uri = _get_git_uri(org, name)
         git_dir = os.path.join(org, name)
         if os.path.exists(git_dir):
             print(uri)
