@@ -85,6 +85,8 @@ def main(create_org_dir):
     # https://review.openstack.org/Documentation/rest-api.html
     projects = json.loads(r.text[4:])
     original = os.getcwd()
+    if not create_org_dir:
+        _sanity_check(projects)
     try:
         for project in projects:
             org, name = split_org_name(project)
@@ -97,10 +99,6 @@ def main(create_org_dir):
 
             elif not _ignore_org(org):
                 print(uri)
-                dirname = os.path.dirname(git_dir)
-                if not os.path.exists(dirname) and not create_org_dir:
-                    print("Directory '%s' does not exist, see help" % dirname)
-                    sys.exit(1)
                 command = "git clone %s %s" % (uri, git_dir)
                 subprocess.call(command.split(' '))
     except (KeyboardInterrupt, SystemExit):
@@ -108,6 +106,21 @@ def main(create_org_dir):
         raise
     finally:
         _print_issues(projects)
+
+
+def _sanity_check(projects):
+    """Make sure the correct org directories already exist."""
+    orgs = set()
+
+    for project in projects:
+        org, _ = split_org_name(project)
+        if not _ignore_org(org):
+            orgs.add(org)
+
+    for org in orgs:
+        if not os.path.isdir(org):
+            print("Directory '%s' does not exist, see help" % org)
+            sys.exit(1)
 
 
 def _print_issues(projects):
