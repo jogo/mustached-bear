@@ -30,7 +30,6 @@ Pulls the following orgs: openstack openstack-dev and openstack-infra
 """
 
 # TODO(jogo): convert to python3
-# TODO(jogo): list local repos that aren't upstream (due to renames etc...)
 # TODO(jogo): make organizations to track configurable
 
 
@@ -85,9 +84,10 @@ def main(create_org_dir):
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
     projects = json.loads(r.text[4:])
+    original = os.getcwd()
     try:
         for project in projects:
-            org, name = project.split('/')
+            org, name = split_org_name(project)
             uri = _get_git_uri(org, name)
             git_dir = os.path.join(org, name)
 
@@ -104,20 +104,49 @@ def main(create_org_dir):
                 command = "git clone %s %s" % (uri, git_dir)
                 subprocess.call(command.split(' '))
     except (KeyboardInterrupt, SystemExit):
+        os.chdir(original)
         raise
     finally:
-        _print_issues()
+        _print_issues(projects)
 
 
-def _print_issues():
+def _print_issues(projects):
     if len(repos_not_on_master) > 0:
         print("Repositories not on master branch:")
     for repo in repos_not_on_master:
         print("- %s" % repo)
+
     if len(repo_errors) > 0:
         print("Errors pulling the following repositories:")
     for repo in repo_errors:
         print("- %s" % repo)
+
+    # go over non ignored orgs and look for orphaned repos
+    orgs = set()
+    orphaned = []
+
+    for project in projects:
+        org, _ = split_org_name(project)
+        orgs.add(org)
+    for org in orgs:
+        if not os.path.isdir(org):
+            # directory doesn't exist
+            continue
+        directories = ['%s/%s' % (org, name) for name in
+                       os.listdir('%s/' % org)]
+        for directory in directories:
+            if directory not in projects:
+                orphaned.append(directory)
+    if orphaned:
+        print("the following directories have no upstream:")
+        for orphan in orphaned:
+            print("- %s" % orphan)
+
+
+def split_org_name(project):
+    org, name = project.split('/')
+    return org, name
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Clone OpenStack repos")
