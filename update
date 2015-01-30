@@ -16,6 +16,7 @@
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -94,17 +95,7 @@ def _update(uri, git_dir):
     os.chdir(original)
 
 
-def _print_issues(projects):
-    if len(repos_not_on_master) > 0:
-        print("Repositories not on master branch:")
-    for repo in repos_not_on_master:
-        print("- %s" % repo)
-
-    if len(repo_errors) > 0:
-        print("Errors pulling the following repositories:")
-    for repo in repo_errors:
-        print("- %s" % repo)
-
+def _get_orphaned(projects):
     # go over non ignored orgs and look for orphaned repos
     orgs = set()
     orphaned = []
@@ -116,18 +107,34 @@ def _print_issues(projects):
         if not os.path.isdir(org):
             # directory doesn't exist
             continue
-        directories = ['%s/%s' % (org, name) for name in
-                       os.listdir('%s/' % org)]
+        directories = [os.path.join(org, name) for name in
+                       os.listdir(org) if
+                       os.path.isdir(os.path.join(org, name))]
         for directory in directories:
             if directory not in projects:
                 orphaned.append(directory)
+    return orphaned
+
+
+def _print_issues(projects):
+    if len(repos_not_on_master) > 0:
+        print("Repositories not on master branch:")
+    for repo in repos_not_on_master:
+        print("- %s" % repo)
+
+    if len(repo_errors) > 0:
+        print("Errors pulling the following repositories:")
+    for repo in repo_errors:
+        print("- %s" % repo)
+
+    orphaned = _get_orphaned(projects)
     if orphaned:
-        print("the following directories have no upstream:")
+        print("the following directories have been orphaned (no upstream):")
         for orphan in orphaned:
             print("- %s" % orphan)
 
 
-def main(create_org_dir):
+def main(create_org_dir, delete_orphaned):
     # List of all openstack repos
     r = requests.get("https://review.openstack.org:443/projects/")
     # strip off first few chars because 'the JSON response body starts with a
@@ -138,6 +145,12 @@ def main(create_org_dir):
     original = os.getcwd()
     if not create_org_dir:
         _sanity_check(projects)
+    if delete_orphaned:
+        orphaned = _get_orphaned(projects)
+        for orphan in orphaned:
+            print("deleting repo: %s" % orphan)
+            shutil.rmtree(orphan)
+        sys.exit(0)
     try:
         for project in projects:
             org, name = _split_org_name(project)
@@ -163,5 +176,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("Clone OpenStack repos")
     parser.add_argument('--force', '-f', action='store_true',
                         help='create organization directories if not found')
+    parser.add_argument('--delete', '-d', action='store_true',
+                        help='Just delete orphaned repos')
     args = parser.parse_args()
-    main(args.force)
+    main(args.force, args.delete)
