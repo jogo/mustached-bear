@@ -44,6 +44,26 @@ def _ignore_org(org):
     return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
 
 
+def _split_org_name(project):
+    org, name = project.split('/')
+    return org, name
+
+
+def _sanity_check(projects):
+    """Make sure the correct org directories already exist."""
+    orgs = set()
+
+    for project in projects:
+        org, _ = _split_org_name(project)
+        if not _ignore_org(org):
+            orgs.add(org)
+
+    for org in orgs:
+        if not os.path.isdir(org):
+            print("Directory '%s' does not exist, see help" % org)
+            sys.exit(1)
+
+
 def _update(uri, git_dir):
     print(uri)
     original = os.getcwd()
@@ -74,53 +94,6 @@ def _update(uri, git_dir):
     os.chdir(original)
 
 
-def main(create_org_dir):
-    # List of all openstack repos
-    r = requests.get("https://review.openstack.org:443/projects/")
-    # strip off first few chars because 'the JSON response body starts with a
-    # magic prefix line that must be stripped before feeding the rest of the
-    # response body to a JSON parser'
-    # https://review.openstack.org/Documentation/rest-api.html
-    projects = json.loads(r.text[4:])
-    original = os.getcwd()
-    if not create_org_dir:
-        _sanity_check(projects)
-    try:
-        for project in projects:
-            org, name = split_org_name(project)
-            uri = _get_git_uri(org, name)
-            git_dir = os.path.join(org, name)
-
-            if os.path.exists(git_dir):
-                # If git_dir exists just run git pull/fetch
-                _update(uri, git_dir)
-
-            elif not _ignore_org(org):
-                print(uri)
-                command = "git clone %s %s" % (uri, git_dir)
-                subprocess.call(command.split(' '))
-    except (KeyboardInterrupt, SystemExit):
-        os.chdir(original)
-        raise
-    finally:
-        _print_issues(projects)
-
-
-def _sanity_check(projects):
-    """Make sure the correct org directories already exist."""
-    orgs = set()
-
-    for project in projects:
-        org, _ = split_org_name(project)
-        if not _ignore_org(org):
-            orgs.add(org)
-
-    for org in orgs:
-        if not os.path.isdir(org):
-            print("Directory '%s' does not exist, see help" % org)
-            sys.exit(1)
-
-
 def _print_issues(projects):
     if len(repos_not_on_master) > 0:
         print("Repositories not on master branch:")
@@ -137,7 +110,7 @@ def _print_issues(projects):
     orphaned = []
 
     for project in projects:
-        org, _ = split_org_name(project)
+        org, _ = _split_org_name(project)
         orgs.add(org)
     for org in orgs:
         if not os.path.isdir(org):
@@ -154,9 +127,36 @@ def _print_issues(projects):
             print("- %s" % orphan)
 
 
-def split_org_name(project):
-    org, name = project.split('/')
-    return org, name
+def main(create_org_dir):
+    # List of all openstack repos
+    r = requests.get("https://review.openstack.org:443/projects/")
+    # strip off first few chars because 'the JSON response body starts with a
+    # magic prefix line that must be stripped before feeding the rest of the
+    # response body to a JSON parser'
+    # https://review.openstack.org/Documentation/rest-api.html
+    projects = json.loads(r.text[4:])
+    original = os.getcwd()
+    if not create_org_dir:
+        _sanity_check(projects)
+    try:
+        for project in projects:
+            org, name = _split_org_name(project)
+            uri = _get_git_uri(org, name)
+            git_dir = os.path.join(org, name)
+
+            if os.path.exists(git_dir):
+                # If git_dir exists just run git pull/fetch
+                _update(uri, git_dir)
+
+            elif not _ignore_org(org):
+                print(uri)
+                command = "git clone %s %s" % (uri, git_dir)
+                subprocess.call(command.split(' '))
+    except (KeyboardInterrupt, SystemExit):
+        os.chdir(original)
+        raise
+    finally:
+        _print_issues(projects)
 
 
 if __name__ == "__main__":
