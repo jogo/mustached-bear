@@ -28,9 +28,7 @@ Clone/Fetch all openstack repos from git.openstack.org.
 Pulls the following orgs: openstack openstack-dev and openstack-infra
 """
 
-# TODO(jogo): convert to python3
-# TODO(jogo): make organizations to track configurable
-
+# TODO(jogo): generalize beyond just openstack
 
 repos_not_on_master = []
 repo_errors = []
@@ -41,6 +39,7 @@ def _get_git_uri(org, name):
     return "git://git.openstack.org/%s/%s" % (org, name)
 
 
+# TODO(jogo): make organizations to track configurable
 def _ignore_org(org):
     return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
 
@@ -81,7 +80,7 @@ def _update(uri, git_dir):
                      stderr=subprocess.PIPE).communicate()
     # If current branch is master, do git pull
     command = "git rev-parse --abbrev-ref HEAD"
-    out = subprocess.check_output(command.split(' '))
+    out = subprocess.check_output(command.split(' ')).decode()
     if "master\n" == out:
         # Don't do a git pull if local changes
         if subprocess.call("git diff --exit-code".split(' ')) is 0:
@@ -93,7 +92,7 @@ def _update(uri, git_dir):
     else:
         # make a note of the current branch
         branch = out.strip()
-        print("Branch: '%s'" % branch.decode())
+        print("Branch: '%s'" % branch)
         repos_not_on_master.append(git_dir)
     os.chdir(original)
 
