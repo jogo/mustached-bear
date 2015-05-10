@@ -137,13 +137,14 @@ def _print_issues(projects):
             print("- %s" % orphan)
 
 
-def strip_root(projects):
-    """Remove All-Users"""
-    projects_cleaned = {}
-    for project in projects:
-        if project not in ("All-Users"):
-            projects_cleaned[project] = projects[project]
-    return projects_cleaned
+def remove_all_users(projects):
+    """Remove the All-Users project.
+
+    Since we aren't interested in it
+    """
+    name = "All-Users"
+    if name in projects:
+        del projects[name]
 
 
 def main(create_org_dir, delete_orphaned):
@@ -154,7 +155,7 @@ def main(create_org_dir, delete_orphaned):
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
     projects = json.loads(r.text[4:])
-    projects = strip_root(projects)
+    remove_all_users(projects)
     original = os.getcwd()
     if not create_org_dir:
         _sanity_check(projects)
