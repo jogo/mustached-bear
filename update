@@ -69,23 +69,23 @@ def _sanity_check(projects):
 
 def _update(uri, git_dir):
     print(uri)
-    original = os.getcwd()
-    os.chdir(git_dir)
     command = "git fetch origin"
-    subprocess.call(command.split(' '))
+    subprocess.call(command.split(' '), cwd=git_dir)
     # get notes, fail silently
     command = ("git fetch origin "
                "refs/notes/review:refs/notes/review")
     subprocess.Popen(command.split(' '),
-                     stderr=subprocess.PIPE).communicate()
+                     stderr=subprocess.PIPE, cwd=git_dir).communicate()
     # If current branch is master, do git pull
     command = "git rev-parse --abbrev-ref HEAD"
-    out = subprocess.check_output(command.split(' ')).decode()
+    out = subprocess.check_output(command.split(' '), cwd=git_dir).decode()
     if "master\n" == out:
         # Don't do a git pull if local changes
-        if subprocess.call("git diff --exit-code".split(' ')) is 0:
+        command = "git diff --exit-code".split(' ')
+        if subprocess.call(command, cwd=git_dir) is 0:
             # if needs a merge, fail
-            if (subprocess.call("git pull --ff-only".split(' '))
+            command = "git pull --ff-only".split(' ')
+            if (subprocess.call(command, cwd=git_dir)
                is not 0):
                 # ff failed
                 repo_errors.append(git_dir)
@@ -94,7 +94,6 @@ def _update(uri, git_dir):
         branch = out.strip()
         print("Branch: '%s'" % branch)
         repos_not_on_master.append(git_dir)
-    os.chdir(original)
 
 
 def _get_orphaned(projects):
@@ -155,7 +154,6 @@ def main(create_org_dir, delete_orphaned):
     # https://review.openstack.org/Documentation/rest-api.html
     projects = json.loads(r.text[4:])
     remove_all_users(projects)
-    original = os.getcwd()
     if not create_org_dir:
         _sanity_check(projects)
     if delete_orphaned:
@@ -179,7 +177,6 @@ def main(create_org_dir, delete_orphaned):
                 command = "git clone %s %s" % (uri, git_dir)
                 subprocess.call(command.split(' '))
     except (KeyboardInterrupt, SystemExit):
-        os.chdir(original)
         raise
     finally:
         _print_issues(projects)
