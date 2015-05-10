@@ -46,7 +46,10 @@ def _ignore_org(org):
 
 
 def _split_org_name(project):
-    org, name = project.split('/')
+    try:
+        org, name = project.split('/')
+    except ValueError:
+        print("Unable to split '%s' on '/'" % project)
     return org, name
 
 
@@ -134,6 +137,15 @@ def _print_issues(projects):
             print("- %s" % orphan)
 
 
+def strip_root(projects):
+    """Remove All-Users"""
+    projects_cleaned = {}
+    for project in projects:
+        if project not in ("All-Users"):
+            projects_cleaned[project] = projects[project]
+    return projects_cleaned
+
+
 def main(create_org_dir, delete_orphaned):
     # List of all openstack repos
     r = requests.get("https://review.openstack.org:443/projects/")
@@ -142,6 +154,7 @@ def main(create_org_dir, delete_orphaned):
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
     projects = json.loads(r.text[4:])
+    projects = strip_root(projects)
     original = os.getcwd()
     if not create_org_dir:
         _sanity_check(projects)
