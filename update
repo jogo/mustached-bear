@@ -15,10 +15,13 @@
 
 import argparse
 import json
+import multiprocessing
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 
 import requests
 
@@ -96,6 +99,22 @@ def _update(uri, git_dir):
         repos_not_on_master.append(git_dir)
 
 
+def git_project(project):
+    """Update/clone a project"""
+    org, name = _split_org_name(project)
+    uri = _get_git_uri(org, name)
+    git_dir = os.path.join(org, name)
+
+    if os.path.exists(git_dir):
+        # If git_dir exists just run git pull/fetch
+        _update(uri, git_dir)
+
+    elif not _ignore_org(org):
+        print(uri)
+        command = "git clone %s %s" % (uri, git_dir)
+        subprocess.call(command.split(' '))
+
+
 def _get_orphaned(projects):
     # go over non ignored orgs and look for orphaned repos
     orgs = set()
@@ -146,6 +165,15 @@ def remove_all_users(projects):
 
 
 def main(create_org_dir, delete_orphaned):
+    def worker():
+        """Thread worker."""
+        while True:
+            git_project(q.get())
+            q.task_done()
+
+    q = queue.Queue()
+    num_worker_threads = multiprocessing.cpu_count()
+
     # List of all openstack repos
     r = requests.get("https://review.openstack.org:443/projects/")
     # strip off first few chars because 'the JSON response body starts with a
@@ -164,18 +192,14 @@ def main(create_org_dir, delete_orphaned):
         sys.exit(0)
     try:
         for project in projects:
-            org, name = _split_org_name(project)
-            uri = _get_git_uri(org, name)
-            git_dir = os.path.join(org, name)
+            q.put(project)
 
-            if os.path.exists(git_dir):
-                # If git_dir exists just run git pull/fetch
-                _update(uri, git_dir)
+        print("Using %d threads" % num_worker_threads)
+        for _ in range(num_worker_threads):
+            t = threading.Thread(target=worker, daemon=True)
+            t.start()
 
-            elif not _ignore_org(org):
-                print(uri)
-                command = "git clone %s %s" % (uri, git_dir)
-                subprocess.call(command.split(' '))
+        q.join()
     except (KeyboardInterrupt, SystemExit):
         raise
     finally:
