@@ -37,6 +37,10 @@ repos_not_on_master = []
 repo_errors = []
 
 
+class GitException(Exception):
+    pass
+
+
 class Project(object):
     def __init__(self, full_name):
         self.full_name = full_name
@@ -57,47 +61,76 @@ class Project(object):
     def __eq__(self, other):
         return self.full_name == other.full_name
 
-    def _update(self, git_dir):
+    def call(self, command, cwd):
+        """Wrapper around subprocess.
+
+        Make sure subprocess exits on early termination.
+        Collects stdout, stderr
+        raise error on non zero exit.
+        """
+        p = subprocess.Popen(command.split(' '),
+                             cwd=cwd,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE,
+                             start_new_session=True)
+        stdout, stderr = p.communicate()
+        if p.returncode is not 0:
+            raise GitException()
+        return stdout, stderr
+
+    def _update(self, git_dir, to_print):
         command = "git fetch origin"
-        subprocess.call(command.split(' '), cwd=git_dir)
+        self.call(command, git_dir)
         # get notes, fail silently
         command = ("git fetch origin "
                    "refs/notes/review:refs/notes/review")
-        subprocess.Popen(command.split(' '),
-                         stderr=subprocess.PIPE, cwd=git_dir).communicate()
+        try:
+            self.call(command, git_dir)
+        except GitException:
+            pass
         # If current branch is master, do git pull
         command = "git rev-parse --abbrev-ref HEAD"
-        out = subprocess.check_output(command.split(' '), cwd=git_dir).decode()
-        if "master\n" == out:
+        out, _ = self.call(command, git_dir)
+        if "master\n" == out.decode():
             # Don't do a git pull if local changes
-            command = "git diff --exit-code".split(' ')
+            command = "git diff --quiet".split(' ')
             if subprocess.call(command, cwd=git_dir) is 0:
                 # if needs a merge, fail
-                command = "git pull --ff-only".split(' ')
-                if (subprocess.call(command, cwd=git_dir)
-                   is not 0):
-                    # ff failed
-                    repo_errors.append(git_dir)
+                command = "git pull --ff-only"
+                out, _ = self.call(command, git_dir)
+                to_print.append(out.decode())
         else:
             # make a note of the current branch
-            branch = out.strip()
-            print("Branch: '%s'" % branch)
+            branch = out.decode().strip()
+            to_print.append("Branch: '%s'" % branch)
             repos_not_on_master.append(git_dir)
 
     # TODO(jogo): fix output with concurrency
     def git(self):
         """Git Update/clone a project"""
+        to_print = []
         git_dir = os.path.join(self.org, self.name)
 
         if os.path.exists(git_dir):
             # If git_dir exists just run git pull/fetch
-            print(self.git_uri)
-            self._update(git_dir)
+            to_print.append("Project: %s" % git_dir)
+            try:
+                self._update(git_dir, to_print)
+            except GitException:
+                repo_errors.append(git_dir)
 
         elif not _ignore_org(self.org):
             print(self.git_uri)
-            command = "git clone %s %s" % (self.uri, git_dir)
-            subprocess.call(command.split(' '))
+            try:
+                command = "git clone %s %s" % (self.uri, git_dir).split(' ')
+                to_print.append(subprocess.check_output(command).decode())
+            except GitException:
+                repo_errors.append(git_dir)
+
+        for line in to_print:
+            if line.rstrip() == '':
+                continue
+            print("%s" % line.rstrip())
 
 
 # TODO(jogo): make organizations to track configurable
@@ -210,7 +243,7 @@ def main(create_org_dir, delete_orphaned):
 
         q.join()
     except (KeyboardInterrupt, SystemExit):
-        raise
+        print("Exiting")
     finally:
         _print_issues(projects)
 
