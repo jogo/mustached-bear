@@ -37,9 +37,67 @@ repos_not_on_master = []
 repo_errors = []
 
 
-def _get_git_uri(org, name):
-    # Convert to git://git.openstack.org/openstack/tempest
-    return "git://git.openstack.org/%s/%s" % (org, name)
+class Project(object):
+    def __init__(self, full_name):
+        self.full_name = full_name
+        self.org, self.name = self._split_org_name()
+        self.git_uri = self._git_uri()
+
+    def _split_org_name(self):
+        try:
+            org, name = self.full_name.split('/')
+        except ValueError:
+            print("Unable to split '%s' on '/'" % self.project)
+        return org, name
+
+    def _git_uri(self):
+        # Convert to git://git.openstack.org/openstack/tempest
+        return "git://git.openstack.org/%s/%s" % (self.org, self.name)
+
+    def __eq__(self, other):
+        return self.full_name == other.full_name
+
+    def _update(self, git_dir):
+        command = "git fetch origin"
+        subprocess.call(command.split(' '), cwd=git_dir)
+        # get notes, fail silently
+        command = ("git fetch origin "
+                   "refs/notes/review:refs/notes/review")
+        subprocess.Popen(command.split(' '),
+                         stderr=subprocess.PIPE, cwd=git_dir).communicate()
+        # If current branch is master, do git pull
+        command = "git rev-parse --abbrev-ref HEAD"
+        out = subprocess.check_output(command.split(' '), cwd=git_dir).decode()
+        if "master\n" == out:
+            # Don't do a git pull if local changes
+            command = "git diff --exit-code".split(' ')
+            if subprocess.call(command, cwd=git_dir) is 0:
+                # if needs a merge, fail
+                command = "git pull --ff-only".split(' ')
+                if (subprocess.call(command, cwd=git_dir)
+                   is not 0):
+                    # ff failed
+                    repo_errors.append(git_dir)
+        else:
+            # make a note of the current branch
+            branch = out.strip()
+            print("Branch: '%s'" % branch)
+            repos_not_on_master.append(git_dir)
+
+    # TODO(jogo): fix output with concurrency
+    def git(self):
+        """Git Update/clone a project"""
+        git_dir = os.path.join(self.org, self.name)
+
+        if os.path.exists(git_dir):
+            # If git_dir exists just run git pull/fetch
+            print(self.git_uri)
+            self._update(git_dir)
+
+        elif not _ignore_org(self.org):
+            print(self.git_uri)
+            command = "git clone %s %s" % (self.uri, git_dir)
+            subprocess.call(command.split(' '))
 
 
 # TODO(jogo): make organizations to track configurable
@@ -47,72 +105,18 @@ def _ignore_org(org):
     return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
 
 
-def _split_org_name(project):
-    try:
-        org, name = project.split('/')
-    except ValueError:
-        print("Unable to split '%s' on '/'" % project)
-    return org, name
-
-
 def _sanity_check(projects):
     """Make sure the correct org directories already exist."""
     orgs = set()
 
     for project in projects:
-        org, _ = _split_org_name(project)
-        if not _ignore_org(org):
-            orgs.add(org)
+        if not _ignore_org(project.org):
+            orgs.add(project.org)
 
     for org in orgs:
         if not os.path.isdir(org):
             print("Directory '%s' does not exist, see help" % org)
             sys.exit(1)
-
-
-def _update(uri, git_dir):
-    print(uri)
-    command = "git fetch origin"
-    subprocess.call(command.split(' '), cwd=git_dir)
-    # get notes, fail silently
-    command = ("git fetch origin "
-               "refs/notes/review:refs/notes/review")
-    subprocess.Popen(command.split(' '),
-                     stderr=subprocess.PIPE, cwd=git_dir).communicate()
-    # If current branch is master, do git pull
-    command = "git rev-parse --abbrev-ref HEAD"
-    out = subprocess.check_output(command.split(' '), cwd=git_dir).decode()
-    if "master\n" == out:
-        # Don't do a git pull if local changes
-        command = "git diff --exit-code".split(' ')
-        if subprocess.call(command, cwd=git_dir) is 0:
-            # if needs a merge, fail
-            command = "git pull --ff-only".split(' ')
-            if (subprocess.call(command, cwd=git_dir)
-               is not 0):
-                # ff failed
-                repo_errors.append(git_dir)
-    else:
-        # make a note of the current branch
-        branch = out.strip()
-        print("Branch: '%s'" % branch)
-        repos_not_on_master.append(git_dir)
-
-
-def git_project(project):
-    """Update/clone a project"""
-    org, name = _split_org_name(project)
-    uri = _get_git_uri(org, name)
-    git_dir = os.path.join(org, name)
-
-    if os.path.exists(git_dir):
-        # If git_dir exists just run git pull/fetch
-        _update(uri, git_dir)
-
-    elif not _ignore_org(org):
-        print(uri)
-        command = "git clone %s %s" % (uri, git_dir)
-        subprocess.call(command.split(' '))
 
 
 def _get_orphaned(projects):
@@ -121,8 +125,7 @@ def _get_orphaned(projects):
     orphaned = []
 
     for project in projects:
-        org, _ = _split_org_name(project)
-        orgs.add(org)
+        orgs.add(project.org)
     for org in orgs:
         if not os.path.isdir(org):
             # directory doesn't exist
@@ -131,7 +134,7 @@ def _get_orphaned(projects):
                        os.listdir(org) if
                        os.path.isdir(os.path.join(org, name))]
         for directory in directories:
-            if directory not in projects:
+            if Project(directory) not in projects:
                 orphaned.append(directory)
     return orphaned
 
@@ -154,25 +157,26 @@ def _print_issues(projects):
             print("- %s" % orphan)
 
 
-def remove_all_users(projects):
-    """Remove the All-Users project.
+def skip_project(project_name):
+    """skip special projects
 
-    Since we aren't interested in it
+    Skip All-Users project Since we aren't interested in it
     """
     name = "All-Users"
-    if name in projects:
-        del projects[name]
+    return project_name == name
 
 
 def main(create_org_dir, delete_orphaned):
     def worker():
         """Thread worker."""
         while True:
-            git_project(q.get())
+            q.get().git()
             q.task_done()
 
     q = queue.Queue()
     num_worker_threads = multiprocessing.cpu_count()
+
+    projects = []
 
     # List of all openstack repos
     r = requests.get("https://review.openstack.org:443/projects/")
@@ -180,16 +184,21 @@ def main(create_org_dir, delete_orphaned):
     # magic prefix line that must be stripped before feeding the rest of the
     # response body to a JSON parser'
     # https://review.openstack.org/Documentation/rest-api.html
-    projects = json.loads(r.text[4:])
-    remove_all_users(projects)
+    for name in json.loads(r.text[4:]):
+        if skip_project(name):
+            continue
+        projects.append(Project(name))
+
     if not create_org_dir:
         _sanity_check(projects)
+
     if delete_orphaned:
         orphaned = _get_orphaned(projects)
         for orphan in orphaned:
             print("deleting repo: %s" % orphan)
             shutil.rmtree(orphan)
         sys.exit(0)
+
     try:
         for project in projects:
             q.put(project)
