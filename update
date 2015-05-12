@@ -12,7 +12,7 @@
 #  License for the specific language governing permissions and limitations
 #  under the License.
 
-
+import _thread
 import argparse
 import json
 import multiprocessing
@@ -203,8 +203,13 @@ def main(create_org_dir, delete_orphaned):
     def worker():
         """Thread worker."""
         while True:
-            q.get().git()
-            q.task_done()
+            try:
+                q.get().git()
+                q.task_done()
+            except Exception:
+                # If exception on worker, exit
+                _thread.interrupt_main()
+                raise
 
     q = queue.Queue()
     num_worker_threads = multiprocessing.cpu_count()
