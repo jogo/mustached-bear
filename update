@@ -61,7 +61,7 @@ class Project(object):
     def __eq__(self, other):
         return self.full_name == other.full_name
 
-    def call(self, command, cwd):
+    def call(self, command, cwd=None):
         """Wrapper around subprocess.
 
         Make sure subprocess exits on early termination.
@@ -75,35 +75,41 @@ class Project(object):
                              start_new_session=True)
         stdout, stderr = p.communicate()
         if p.returncode is not 0:
+            print(stderr)
             raise GitException()
-        return stdout, stderr
+        return stdout
 
     def _update(self, git_dir, to_print):
-        command = "git fetch origin"
-        self.call(command, git_dir)
         # get notes, fail silently
-        command = ("git fetch origin "
-                   "refs/notes/review:refs/notes/review")
-        try:
-            self.call(command, git_dir)
-        except GitException:
-            pass
+        # Not using notes, and trying to speed things up
+        # command = ("git fetch origin "
+        #            "refs/notes/review:refs/notes/review")
+        # try:
+        #     self.call(command, git_dir)
+        # except GitException:
+        #     pass
+
         # If current branch is master, do git pull
         command = "git rev-parse --abbrev-ref HEAD"
-        out, _ = self.call(command, git_dir)
+        out = self.call(command, git_dir)
         if "master\n" == out.decode():
             # Don't do a git pull if local changes
             command = "git diff --quiet".split(' ')
             if subprocess.call(command, cwd=git_dir) is 0:
                 # if needs a merge, fail
                 command = "git pull --ff-only"
-                out, _ = self.call(command, git_dir)
+                out = self.call(command, git_dir)
                 to_print.append(out.decode())
+            else:
+                command = "git fetch origin"
+                self.call(command, git_dir)
         else:
             # make a note of the current branch
             branch = out.decode().strip()
             to_print.append("Branch: '%s'" % branch)
             repos_not_on_master.append(git_dir)
+            command = "git fetch origin"
+            self.call(command, git_dir)
 
     # TODO(jogo): fix output with concurrency
     def git(self):
@@ -122,8 +128,9 @@ class Project(object):
         elif not _ignore_org(self.org):
             print(self.git_uri)
             try:
-                command = "git clone %s %s" % (self.uri, git_dir).split(' ')
-                to_print.append(subprocess.check_output(command).decode())
+                command = "git clone %s %s" % (self.git_uri, git_dir)
+                out = self.call(command)
+                to_print.append(out.decode())
             except GitException:
                 repo_errors.append(git_dir)
 
