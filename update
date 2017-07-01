@@ -206,7 +206,7 @@ def skip_project(project_name):
     return project_name == name
 
 
-def main(create_org_dir, delete_orphaned):
+def main(create_org_dir, delete_orphaned, concurrency):
     def worker():
         """Thread worker."""
         while True:
@@ -220,6 +220,8 @@ def main(create_org_dir, delete_orphaned):
 
     q = queue.Queue()
     num_worker_threads = multiprocessing.cpu_count()
+    if concurrency:
+        num_worker_threads = concurrency
 
     projects = []
 
@@ -266,5 +268,8 @@ if __name__ == "__main__":
                         help='create organization directories if not found')
     parser.add_argument('--delete', '-d', action='store_true',
                         help='Just delete orphaned repos')
+    parser.add_argument('--concurrency', '-c', type=int,
+                        help='The number of workers to use when running in'
+                             'parallel. By default this is the number of cpus')
     args = parser.parse_args()
-    main(args.force, args.delete)
+    main(args.force, args.delete, args.concurrency)
