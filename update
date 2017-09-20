@@ -51,7 +51,8 @@ class Project(object):
         try:
             org, name = self.full_name.split('/')
         except ValueError:
-            print("Unable to split '%s' on '/'" % self.project)
+            print("Unable to split '%s' on '/'" % self.full_name)
+            raise
         return org, name
 
     def _git_uri(self):
@@ -200,10 +201,11 @@ def _print_issues(projects):
 def skip_project(project_name):
     """skip special projects
 
-    Skip All-Users project Since we aren't interested in it
+    Skip All-Users, API-Projects, All-Projects project Since we aren't
+    interested in it
     """
-    name = "All-Users"
-    return project_name == name
+    names = ["All-Users", "API-Projects", "All-Projects"]
+    return project_name in names
 
 
 def main(create_org_dir, delete_orphaned, concurrency):
