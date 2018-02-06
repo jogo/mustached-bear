@@ -53,9 +53,9 @@ class Project(object):
             # the other repo which should be dict and have these keys
             self.full_name = repo['full_name']
             self.org, self.name = repo['owner']['login'], repo['name']
-            # NOTE: Use http_url here because of the GitHub recommendation
+            # NOTE: Use html_url here because of the GitHub recommendation
             # https://help.github.com/articles/which-remote-url-should-i-use/
-            self.git_uri = repo['http_url']
+            self.git_uri = repo['html_url']
 
     def _split_org_name(self):
         try:
