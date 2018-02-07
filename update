@@ -42,10 +42,11 @@ class GitException(Exception):
 
 
 class Project(object):
-    def __init__(self, full_name):
+    def __init__(self, full_name, recurse=False):
         self.full_name = full_name
         self.org, self.name = self._split_org_name()
         self.git_uri = self._git_uri()
+        self.recurse = recurse
 
     def _split_org_name(self):
         try:
@@ -130,6 +131,8 @@ class Project(object):
             print(self.git_uri)
             try:
                 command = "git clone %s %s" % (self.git_uri, git_dir)
+                if self.recurse:
+                    command += ' --recursive'
                 out = self.call(command)
                 to_print.append(out.decode())
             except GitException:
@@ -208,7 +211,7 @@ def skip_project(project_name):
     return project_name in names
 
 
-def main(create_org_dir, delete_orphaned, concurrency):
+def main(create_org_dir, delete_orphaned, concurrency, recurse=False):
     def worker():
         """Thread worker."""
         while True:
@@ -236,7 +239,7 @@ def main(create_org_dir, delete_orphaned, concurrency):
     for name in json.loads(r.text[4:]):
         if skip_project(name):
             continue
-        projects.append(Project(name))
+        projects.append(Project(name, recurse))
 
     if not create_org_dir:
         _sanity_check(projects)
@@ -273,5 +276,9 @@ if __name__ == "__main__":
     parser.add_argument('--concurrency', '-c', type=int,
                         help='The number of workers to use when running in'
                              'parallel. By default this is the number of cpus')
+    parser.add_argument('--recurse-submodule', '-r', action='store_true',
+                        dest='recurse',
+                        help='For projects with git submodules perform a '
+                             'recursive clone to also clone the submodules')
     args = parser.parse_args()
-    main(args.force, args.delete, args.concurrency)
+    main(args.force, args.delete, args.concurrency, args.recurse)
