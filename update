@@ -42,10 +42,20 @@ class GitException(Exception):
 
 
 class Project(object):
-    def __init__(self, full_name, recurse=False):
-        self.full_name = full_name
-        self.org, self.name = self._split_org_name()
-        self.git_uri = self._git_uri()
+    def __init__(self, repo, recurse=False, is_os=True):
+        if (is_os):
+            # OpenStack repo
+            self.full_name = repo
+            self.org, self.name = self._split_org_name()
+            self.git_uri = self._git_uri()
+        else:
+            # Assume a GitHub repo
+            # the other repo which should be dict and have these keys
+            self.full_name = repo['full_name']
+            self.org, self.name = repo['owner']['login'], repo['name']
+            # NOTE: Use html_url here because of the GitHub recommendation
+            # https://help.github.com/articles/which-remote-url-should-i-use/
+            self.git_uri = repo['html_url']
         self.recurse = recurse
 
     def _split_org_name(self):
@@ -211,7 +221,8 @@ def skip_project(project_name):
     return project_name in names
 
 
-def main(create_org_dir, delete_orphaned, concurrency, recurse=False):
+def main(create_org_dir, delete_orphaned, concurrency, recurse=False,
+         repos_url='https://review.openstack.org:443/projects/'):
     def worker():
         """Thread worker."""
         while True:
@@ -229,17 +240,31 @@ def main(create_org_dir, delete_orphaned, concurrency, recurse=False):
         num_worker_threads = concurrency
 
     projects = []
+    projects_json = ""
+    is_os = True
 
-    # List of all openstack repos
-    r = requests.get("https://review.openstack.org:443/projects/")
-    # strip off first few chars because 'the JSON response body starts with a
-    # magic prefix line that must be stripped before feeding the rest of the
-    # response body to a JSON parser'
-    # https://review.openstack.org/Documentation/rest-api.html
-    for name in json.loads(r.text[4:]):
-        if skip_project(name):
+    if (repos_url == 'https://review.openstack.org:443/projects/'):
+        # List of all openstack repos
+        r = requests.get("https://review.openstack.org:443/projects/")
+        # strip off first few chars because 'the JSON response body starts with a
+        # magic prefix line that must be stripped before feeding the rest of the
+        # response body to a JSON parser'
+        # https://review.openstack.org/Documentation/rest-api.html
+        projects_json = r.text[4:]
+    elif (repos_url.find('https://api.github.com/') == 0):
+        # List of all the specified github repos
+        is_os = False
+        r = requests.get(repos_url)
+        # Assume that there's no trick for this URL
+        projects_json = r.text
+    else:
+        print("Unsupported repos_url: %s" % repos_url)
+        sys.exit(1)
+
+    for name in json.loads(projects_json):
+        if is_os and skip_project(name):
             continue
-        projects.append(Project(name, recurse))
+        projects.append(Project(name, recurse, is_os))
 
     if not create_org_dir:
         _sanity_check(projects)
@@ -280,5 +305,7 @@ if __name__ == "__main__":
                         dest='recurse',
                         help='For projects with git submodules perform a '
                              'recursive clone to also clone the submodules')
+    parser.add_argument('--repos-url', '-u', type=str,
+                        help='The URL of repos that should return JSON')
     args = parser.parse_args()
-    main(args.force, args.delete, args.concurrency, args.recurse)
+    main(args.force, args.delete, args.concurrency, args.recurse, args.repos_url)
