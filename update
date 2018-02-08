@@ -42,7 +42,7 @@ class GitException(Exception):
 
 
 class Project(object):
-    def __init__(self, repo, is_os=True):
+    def __init__(self, repo, recurse=False, is_os=True):
         if (is_os):
             # OpenStack repo
             self.full_name = repo
@@ -56,6 +56,7 @@ class Project(object):
             # NOTE: Use html_url here because of the GitHub recommendation
             # https://help.github.com/articles/which-remote-url-should-i-use/
             self.git_uri = repo['html_url']
+        self.recurse = recurse
 
     def _split_org_name(self):
         try:
@@ -140,6 +141,8 @@ class Project(object):
             print(self.git_uri)
             try:
                 command = "git clone %s %s" % (self.git_uri, git_dir)
+                if self.recurse:
+                    command += ' --recursive'
                 out = self.call(command)
                 to_print.append(out.decode())
             except GitException:
@@ -218,7 +221,8 @@ def skip_project(project_name):
     return project_name in names
 
 
-def main(create_org_dir, delete_orphaned, concurrency, repos_url):
+def main(create_org_dir, delete_orphaned, concurrency, recurse=False,
+         repos_url='https://review.openstack.org:443/projects/'):
     def worker():
         """Thread worker."""
         while True:
@@ -260,7 +264,7 @@ def main(create_org_dir, delete_orphaned, concurrency, repos_url):
     for name in json.loads(projects_json):
         if is_os and skip_project(name):
             continue
-        projects.append(Project(name, is_os))
+        projects.append(Project(name, recurse, is_os))
 
     if not create_org_dir:
         _sanity_check(projects)
@@ -297,8 +301,11 @@ if __name__ == "__main__":
     parser.add_argument('--concurrency', '-c', type=int,
                         help='The number of workers to use when running in'
                              'parallel. By default this is the number of cpus')
-    parser.add_argument('--repos-url', '-r', type=str,
-                        default='https://review.openstack.org:443/projects/',
+    parser.add_argument('--recurse-submodule', '-r', action='store_true',
+                        dest='recurse',
+                        help='For projects with git submodules perform a '
+                             'recursive clone to also clone the submodules')
+    parser.add_argument('--repos-url', '-u', type=str,
                         help='The URL of repos that should return JSON')
     args = parser.parse_args()
-    main(args.force, args.delete, args.concurrency, args.repos_url)
+    main(args.force, args.delete, args.concurrency, args.recurse, args.repos_url)
