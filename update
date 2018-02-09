@@ -306,6 +306,7 @@ if __name__ == "__main__":
                         help='For projects with git submodules perform a '
                              'recursive clone to also clone the submodules')
     parser.add_argument('--repos-url', '-u', type=str,
+                        default='https://review.openstack.org:443/projects/',
                         help='The URL of repos that should return JSON')
     args = parser.parse_args()
     main(args.force, args.delete, args.concurrency, args.recurse, args.repos_url)
