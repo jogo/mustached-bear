@@ -13,7 +13,7 @@ Usage
 
 Install requirements:
 
-    $ pip -r requirements.txt
+    $ pip install -r requirements.txt
 
 Just run in the directory where you wish to keep your repos:
 
