@@ -86,7 +86,7 @@ class Project(object):
                              stderr=subprocess.PIPE,
                              start_new_session=True)
         stdout, stderr = p.communicate()
-        if p.returncode is not 0:
+        if p.returncode != 0:
             print(stderr)
             raise GitException()
         return stdout
@@ -107,7 +107,7 @@ class Project(object):
         if "master\n" == out.decode():
             # Don't do a git pull if local changes
             command = "git diff --quiet".split(' ')
-            if subprocess.call(command, cwd=git_dir) is 0:
+            if subprocess.call(command, cwd=git_dir) == 0:
                 # if needs a merge, fail
                 command = "git pull --ff-only"
                 out = self.call(command, git_dir)
