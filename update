@@ -137,7 +137,7 @@ class Project(object):
             except GitException:
                 repo_errors.append(git_dir)
 
-        elif not _ignore_org(self.org):
+        elif not self.org in ignore_org:
             print(self.git_uri)
             try:
                 command = "git clone %s %s" % (self.git_uri, git_dir)
@@ -154,17 +154,12 @@ class Project(object):
             print("%s" % line.rstrip())
 
 
-# TODO(jogo): make organizations to track configurable
-def _ignore_org(org):
-    return org in ['stackforge', 'stackforge-attic', 'openstack-attic']
-
-
 def _sanity_check(projects):
     """Make sure the correct org directories already exist."""
     orgs = set()
 
     for project in projects:
-        if not _ignore_org(project.org):
+        if not project.org in ignore_org:
             orgs.add(project.org)
 
     for org in orgs:
@@ -222,7 +217,9 @@ def skip_project(project_name):
 
 
 def main(create_org_dir, delete_orphaned, concurrency, recurse=False,
-         repos_url='https://review.opendev.org:443/projects/'):
+         repos_url='https://review.opendev.org:443/projects/', ignore_org_arg=[]):
+    global ignore_org
+    ignore_org = ignore_org_arg
     def worker():
         """Thread worker."""
         while True:
@@ -308,5 +305,11 @@ if __name__ == "__main__":
     parser.add_argument('--repos-url', '-u', type=str,
                         default='https://review.opendev.org:443/projects/',
                         help='The URL of repos that should return JSON')
+    parser.add_argument('--ignore-org', '-i', type=str,
+                        default=['stackforge', 'stackforge-attic',
+                                 'openstack-attic', 'skyline', 'pypa', 'pyca',
+                                 'openinfra', 'openinfralabs'], nargs='*',
+                        help='Organizations to ignore')
     args = parser.parse_args()
-    main(args.force, args.delete, args.concurrency, args.recurse, args.repos_url)
+    main(args.force, args.delete, args.concurrency, args.recurse,
+         args.repos_url, args.ignore_org)
