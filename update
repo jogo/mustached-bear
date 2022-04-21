@@ -101,10 +101,10 @@ class Project(object):
         # except GitException:
         #     pass
 
-        # If current branch is master, do git pull
+        # If current branch is master or main, do git pull
         command = "git rev-parse --abbrev-ref HEAD"
         out = self.call(command, git_dir)
-        if "master\n" == out.decode():
+        if "master\n" == out.decode() or "main\n" == out.decode():
             # Don't do a git pull if local changes
             command = "git diff --quiet".split(' ')
             if subprocess.call(command, cwd=git_dir) == 0:
@@ -190,7 +190,7 @@ def _get_orphaned(projects):
 
 def _print_issues(projects):
     if len(repos_not_on_master) > 0:
-        print("Repositories not on master branch:")
+        print("Repositories not on master or main branch:")
     for repo in repos_not_on_master:
         print("- %s" % repo)
 
